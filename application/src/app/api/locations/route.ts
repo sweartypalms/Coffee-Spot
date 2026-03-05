@@ -23,6 +23,9 @@ export interface LocationData {
     operatingHours: OperatingHour[];
     latitude: number;
     longitude: number;
+    gallery?: {
+        images: unknown;
+    } | null;
 }
 
 // defining the expected data for operating hours

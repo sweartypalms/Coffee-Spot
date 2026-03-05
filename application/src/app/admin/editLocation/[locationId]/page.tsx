@@ -1,16 +1,27 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { DayOfWeek } from '@prisma/client';
 import { useSession } from 'next-auth/react';
 import Unauthorized from '../../../components/Unauthorized';
 import useGetSpecificLocation from '../../../hooks/useGetSpecificLocation';
 import useEditLocation from '../../../hooks/useEditLocation';
+import Image from 'next/image';
+import toast from 'react-hot-toast';
+
+const normalizeGalleryImages = (images: unknown): string[] => {
+    if (!Array.isArray(images)) return [];
+    return images.filter((image): image is string => typeof image === 'string' && image.trim().length > 0);
+};
 
 const Page = ({ params }: { params: { locationId: string } }) => {
     const { data: session, status } = useSession();
     const { specificLocation, fetchSpecificLocation } = useGetSpecificLocation();
     const { editLocation, loading } = useEditLocation();
+    const inputFileRef = useRef<HTMLInputElement>(null);
     const locationId = params.locationId;
+    const [galleryImages, setGalleryImages] = useState<string[]>([]);
+    const [deletedImages, setDeletedImages] = useState<string[]>([]);
+    const [uploadingImage, setUploadingImage] = useState(false);
     const [formData, setFormData] = useState({
         name: '',
         address: '',
@@ -58,9 +69,58 @@ const Page = ({ params }: { params: { locationId: string } }) => {
                 latitude: specificLocation.latitude,
                 longitude: specificLocation.longitude,
                 operatingHours: specificLocation.operatingHours
-            })
+            });
+
+            const existingGalleryImages = normalizeGalleryImages(specificLocation.gallery?.images);
+            if (existingGalleryImages.length > 0) {
+                setGalleryImages(existingGalleryImages);
+            } else if (specificLocation.imageWebLink && specificLocation.imageWebLink !== 'N/A') {
+                setGalleryImages([specificLocation.imageWebLink]);
+            } else {
+                setGalleryImages([]);
+            }
+
+            setDeletedImages([]);
         }
     }, [specificLocation]); // Dependency on specificLocation to update form data
+
+    const handleImageUpload = async (e: React.FormEvent<HTMLButtonElement>) => {
+        e.preventDefault();
+        try {
+            if (!inputFileRef.current?.files || inputFileRef.current.files.length === 0) {
+                throw new Error('Please choose an image first');
+            }
+
+            setUploadingImage(true);
+            const file = inputFileRef.current.files[0];
+            const response = await fetch(`/api/upload?filename=${file.name}`, {
+                method: 'POST',
+                body: file,
+            });
+
+            const newBlob = await response.json();
+            if (newBlob.error) {
+                throw new Error(newBlob.error);
+            }
+
+            setGalleryImages((previousImages) => [...previousImages, newBlob.url]);
+            inputFileRef.current.value = '';
+            toast.success('Image uploaded successfully');
+        } catch (error: any) {
+            toast.error(error.message ?? 'Failed to upload image');
+        } finally {
+            setUploadingImage(false);
+        }
+    };
+
+    const handleRemoveImage = (imageUrl: string) => {
+        setGalleryImages((previousImages) => previousImages.filter((image) => image !== imageUrl));
+        setDeletedImages((previousDeletedImages) => (
+            previousDeletedImages.includes(imageUrl)
+                ? previousDeletedImages
+                : [...previousDeletedImages, imageUrl]
+        ));
+    };
 
     // Prevent rendering if session is loading
     if (status === 'loading') return;
@@ -72,8 +132,19 @@ const Page = ({ params }: { params: { locationId: string } }) => {
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
+
+        if (galleryImages.length === 0) {
+            toast.error('Please keep at least one image');
+            return;
+        }
+
         formData.seatingCapacity = Number(formData.seatingCapacity);
-        await editLocation(locationId, formData, session);
+        await editLocation(locationId, {
+            ...formData,
+            imageWebLink: galleryImages[0],
+            galleryImages,
+            deletedImages
+        }, session);
     };
 
     return (
@@ -175,6 +246,53 @@ const Page = ({ params }: { params: { locationId: string } }) => {
                         value={formData.locationWebsiteLink}
                         onChange={(e) => setFormData({ ...formData, locationWebsiteLink: e.target.value })}
                     />
+                </div>
+
+                <div className="space-y-4">
+                    <h2 className="text-lg font-medium text-gray-800">Location Images:</h2>
+                    <input
+                        name="file"
+                        ref={inputFileRef}
+                        type="file"
+                        accept="image/*"
+                        className="w-full p-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition duration-200"
+                    />
+                    <button
+                        type="button"
+                        onClick={handleImageUpload}
+                        disabled={uploadingImage}
+                        className={`w-full text-white p-3 rounded-md ${uploadingImage ? 'bg-blue-700 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'}`}
+                    >
+                        {uploadingImage ? 'Uploading Image...' : 'Upload Image'}
+                    </button>
+                    {galleryImages.length === 0 && (
+                        <p className="text-sm text-gray-600">No images uploaded yet.</p>
+                    )}
+                    {galleryImages.length > 0 && (
+                        <div className="grid grid-cols-2 gap-4">
+                            {galleryImages.map((imageUrl, index) => (
+                                <div key={imageUrl} className="border border-gray-200 rounded-md p-2">
+                                    <Image
+                                        src={imageUrl}
+                                        alt={`Location image ${index + 1}`}
+                                        width={240}
+                                        height={180}
+                                        className="w-full h-36 object-cover rounded-md"
+                                    />
+                                    {index === 0 && (
+                                        <p className="text-xs text-gray-600 mt-2">Primary image</p>
+                                    )}
+                                    <button
+                                        type="button"
+                                        className="w-full mt-2 bg-red-500 text-white p-2 rounded-md hover:bg-red-600"
+                                        onClick={() => handleRemoveImage(imageUrl)}
+                                    >
+                                        Delete Image
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 <div className="space-y-4">

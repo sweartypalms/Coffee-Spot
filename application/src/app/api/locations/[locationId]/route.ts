@@ -42,6 +42,11 @@ export async function GET(req: NextRequest, { params }: { params: { locationId: 
                 id: locationId
             },
             include: {
+                gallery: {
+                    select: {
+                        images: true
+                    }
+                },
                 operatingHours: {
                     select: {
                         day: true,
@@ -91,6 +96,13 @@ export async function DELETE(req: NextRequest, { params }: { params: { locationI
         const location = await prisma.location.findFirst({
             where: {
                 id: locationId
+            },
+            include: {
+                gallery: {
+                    select: {
+                        images: true
+                    }
+                }
             }
         });
 
@@ -98,12 +110,16 @@ export async function DELETE(req: NextRequest, { params }: { params: { locationI
             return NextResponse.json({ error: "Location not found." }, { status: 404 });
         }
 
-        // this only exists for now because we have items in the db that don't have an image
-        // if(location.imageWebLink && location.imageWebLink.length !== 0 && location.imageWebLink !== "N/A") {
-        //     await del(location.imageWebLink as string);
-        // } 
+        const galleryImages = Array.isArray(location.gallery?.images)
+            ? location.gallery?.images.filter((image): image is string => typeof image === 'string')
+            : [];
 
-        await del(location.imageWebLink as string);
+        const imageUrls = Array.from(new Set([
+            location.imageWebLink,
+            ...galleryImages
+        ])).filter((url): url is string => !!url && url !== "N/A");
+
+        await Promise.allSettled(imageUrls.map((url) => del(url)));
 
         const deletedLocation = await prisma.location.delete({
             where: {
@@ -159,13 +175,33 @@ export async function PATCH(req: NextRequest, { params }: { params: { locationId
             category,
             locationWebsiteLink,
             animalFriendliness,
+            imageWebLink,
             latitude,
             longitude,
-            operatingHours
+            operatingHours,
+            galleryImages,
+            deletedImages
         } = await req.json();
 
-        // Check if any of the fields are empty.
-        if (!name && !address && !phoneNumber && !hasWifi && !seatingCapacity && !category && !locationWebsiteLink && !animalFriendliness && !latitude && !longitude && !operatingHours) {
+        // Check if any updatable field was provided.
+        const hasAnyFieldToUpdate = [
+            name,
+            address,
+            phoneNumber,
+            hasWifi,
+            seatingCapacity,
+            category,
+            locationWebsiteLink,
+            animalFriendliness,
+            imageWebLink,
+            latitude,
+            longitude,
+            operatingHours,
+            galleryImages,
+            deletedImages
+        ].some((value) => value !== undefined);
+
+        if (!hasAnyFieldToUpdate) {
             return NextResponse.json({ error: "No fields provided to update." }, { status: 400 });
         }
 
@@ -188,18 +224,36 @@ export async function PATCH(req: NextRequest, { params }: { params: { locationId
                 id: locationId
             },
             data: {
-                name: name ? name : location.name,
-                address: address ? address : location.address,
-                phoneNumber: phoneNumber ? phoneNumber : location.phoneNumber,
-                hasWifi: hasWifi ? hasWifi : location.hasWifi,
-                seatingCapacity: seatingCapacity ? seatingCapacity : location.seatingCapacity,
-                category: category ? category : location.category,
-                locationWebsiteLink: locationWebsiteLink ? locationWebsiteLink : location.locationWebsiteLink,
-                animalFriendliness: animalFriendliness ? animalFriendliness : location.animalFriendliness,
-                latitude: latitude ? latitude : location.latitude,
-                longitude: longitude ? longitude : location.longitude,
+                name: name !== undefined ? name : location.name,
+                address: address !== undefined ? address : location.address,
+                phoneNumber: phoneNumber !== undefined ? phoneNumber : location.phoneNumber,
+                hasWifi: hasWifi !== undefined ? hasWifi : location.hasWifi,
+                seatingCapacity: seatingCapacity !== undefined ? seatingCapacity : location.seatingCapacity,
+                category: category !== undefined ? category : location.category,
+                locationWebsiteLink: locationWebsiteLink !== undefined ? locationWebsiteLink : location.locationWebsiteLink,
+                animalFriendliness: animalFriendliness !== undefined ? animalFriendliness : location.animalFriendliness,
+                imageWebLink: imageWebLink !== undefined ? imageWebLink : location.imageWebLink,
+                latitude: latitude !== undefined ? latitude : location.latitude,
+                longitude: longitude !== undefined ? longitude : location.longitude,
             }
         });
+
+        // Update or create gallery images if provided.
+        if (Array.isArray(galleryImages)) {
+            const normalizedGalleryImages = galleryImages.filter((image): image is string => typeof image === 'string' && image.trim().length > 0);
+            await prisma.locationGallery.upsert({
+                where: {
+                    locationId: locationId
+                },
+                create: {
+                    locationId: locationId,
+                    images: normalizedGalleryImages
+                },
+                update: {
+                    images: normalizedGalleryImages
+                }
+            });
+        }
 
         // Update the operating hours if they are provided.
         if (operatingHours && operatingHours.length > 0) {
@@ -224,6 +278,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { locationId
 
             // Wait for all operating hour creations to complete
             await Promise.all(operatingHourPromises);
+        }
+
+        // Delete requested images from blob storage.
+        if (Array.isArray(deletedImages) && deletedImages.length > 0) {
+            const normalizedDeletedImages = Array.from(new Set(
+                deletedImages.filter((image): image is string => typeof image === 'string' && image.trim().length > 0 && image !== 'N/A')
+            ));
+            await Promise.allSettled(normalizedDeletedImages.map((url) => del(url)));
         }
 
 
