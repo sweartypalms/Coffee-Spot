@@ -3,6 +3,7 @@ import Image from "next/image";
 import Star from '../star.svg';
 import Icons from '../temp_icon_group.svg';
 import Link from "next/link";
+import { headers } from "next/headers";
 
 const Page = async ({ params }: { params: { id: string } }) => {
     const features = [
@@ -13,8 +14,13 @@ const Page = async ({ params }: { params: { id: string } }) => {
     ]
 
     const { id } = params;
+    const headersList = await headers();
+    const host = headersList.get("x-forwarded-host") ?? headersList.get("host");
+    const protocol = headersList.get("x-forwarded-proto") ?? "http";
+    const fallbackBaseUrl = host ? `${protocol}://${host}` : "";
+    const baseUrl = (process.env.NEXT_PUBLIC_API_URL ?? fallbackBaseUrl).replace(/\/$/, "");
 
-    const locationResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/locations/${id}`);
+    const locationResponse = await fetch(`${baseUrl}/api/locations/${id}`);
     const location = await locationResponse.json();
 
     return (

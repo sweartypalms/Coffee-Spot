@@ -11,15 +11,22 @@ import Link from "next/link";
 import BookmarkButton from "@/app/components/BookmarkButton";
 import BusyRating from "@/app/components/BusyRating";
 import BusynessIndicator from "@/app/components/BusynessIndictator";
+import { headers } from "next/headers";
 
 const Page = async ({ params }: { params: { id: string } }) => {
     const { id } = params;
-    const locationResponse = await fetch(`/api/locations/${id}`, {
+    const headersList = await headers();
+    const host = headersList.get("x-forwarded-host") ?? headersList.get("host");
+    const protocol = headersList.get("x-forwarded-proto") ?? "http";
+    const fallbackBaseUrl = host ? `${protocol}://${host}` : "";
+    const baseUrl = (process.env.NEXT_PUBLIC_API_URL ?? fallbackBaseUrl).replace(/\/$/, "");
+
+    const locationResponse = await fetch(`${baseUrl}/api/locations/${id}`, {
         cache: "no-store"
     }
     );
 
-    const reviewsResponse = await fetch(`/api/reviews/locationReviews/${id}`,
+    const reviewsResponse = await fetch(`${baseUrl}/api/reviews/locationReviews/${id}`,
         { cache: "no-store" }
     );
 
