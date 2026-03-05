@@ -103,9 +103,12 @@ const Page = ({ params }: { params: { locationId: string } }) => {
                 throw new Error(newBlob.error);
             }
 
-            setGalleryImages((previousImages) => [...previousImages, newBlob.url]);
+            setGalleryImages((previousImages) => [
+                newBlob.url,
+                ...previousImages.filter((imageUrl) => imageUrl !== newBlob.url)
+            ]);
             inputFileRef.current.value = '';
-            toast.success('Image uploaded successfully');
+            toast.success('Image uploaded and set as primary');
         } catch (error: any) {
             toast.error(error.message ?? 'Failed to upload image');
         } finally {
