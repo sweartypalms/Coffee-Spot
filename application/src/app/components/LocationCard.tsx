@@ -4,6 +4,7 @@ import Link from 'next/link';
 import Rating from './Rating';
 import clsx from 'clsx';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 
 interface LocationCardProps {
   id: string;
@@ -25,6 +26,7 @@ const LocationCard: React.FC<LocationCardProps> = ({
   animalFriendliness,
 }) => {
   const router = useRouter();
+  const { data: session } = useSession();
 
   const backgroundColor = clsx({
     'bg-olivine hover:bg-olivine': category === 'CAFE',
@@ -128,6 +130,17 @@ const LocationCard: React.FC<LocationCardProps> = ({
           </ul>
         </div>
       </div>
+      {session?.user.role === 'ADMIN' && (
+        <div className="mt-4 pt-3 border-t border-black/10">
+          <Link
+            href={`/admin/editLocation/${id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="inline-block text-sm px-4 py-2 rounded-lg bg-zinc-300 hover:bg-zinc-400"
+          >
+            Edit Location
+          </Link>
+        </div>
+      )}
     </div>
   );
 };

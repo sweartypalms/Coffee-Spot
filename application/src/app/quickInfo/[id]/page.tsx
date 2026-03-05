@@ -4,6 +4,8 @@ import Star from '../star.svg';
 import Icons from '../temp_icon_group.svg';
 import Link from "next/link";
 import { headers } from "next/headers";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/authOptions";
 
 const Page = async ({ params }: { params: { id: string } }) => {
     const features = [
@@ -14,6 +16,8 @@ const Page = async ({ params }: { params: { id: string } }) => {
     ]
 
     const { id } = params;
+    const session = await getServerSession(authOptions);
+    const isAdmin = session?.user.role === 'ADMIN';
     const headersList = await headers();
     const host = headersList.get("x-forwarded-host") ?? headersList.get("host");
     const protocol = headersList.get("x-forwarded-proto") ?? "http";
@@ -76,7 +80,14 @@ const Page = async ({ params }: { params: { id: string } }) => {
                     {/* <button className="font-shantell self-end mr-[25px] w-[170px] h-[60px] text-xl font-bold text-center text-white bg-blue-200 shadow-sm rounded-[100px] tracking-[2px]">
                         learn more!
                     </button> */}
-                    <Link href={`/locationInfo/${id}`} className="font-shantell self-end mr-[25px] w-[170px] h-[60px] text-xl font-bold text-center text-white bg-blue-200 shadow-sm rounded-[100px] tracking-[2px] flex items-center justify-center">Learn More!</Link>
+                    <div className="self-end mr-[25px] flex gap-3">
+                        {isAdmin && (
+                            <Link href={`/admin/editLocation/${id}`} className="font-shantell w-[170px] h-[60px] text-xl font-bold text-center text-stone-700 bg-zinc-300 shadow-sm rounded-[100px] tracking-[2px] flex items-center justify-center">
+                                Edit
+                            </Link>
+                        )}
+                        <Link href={`/locationInfo/${id}`} className="font-shantell w-[170px] h-[60px] text-xl font-bold text-center text-white bg-blue-200 shadow-sm rounded-[100px] tracking-[2px] flex items-center justify-center">Learn More!</Link>
+                    </div>
                 </div>
             </main>
 

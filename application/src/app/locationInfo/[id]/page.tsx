@@ -12,9 +12,13 @@ import BookmarkButton from "@/app/components/BookmarkButton";
 import BusyRating from "@/app/components/BusyRating";
 import BusynessIndicator from "@/app/components/BusynessIndictator";
 import { headers } from "next/headers";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/authOptions";
 
 const Page = async ({ params }: { params: { id: string } }) => {
     const { id } = params;
+    const session = await getServerSession(authOptions);
+    const isAdmin = session?.user.role === 'ADMIN';
     const headersList = await headers();
     const host = headersList.get("x-forwarded-host") ?? headersList.get("host");
     const protocol = headersList.get("x-forwarded-proto") ?? "http";
@@ -84,6 +88,13 @@ const Page = async ({ params }: { params: { id: string } }) => {
                         <ContactInfo location={location} />
                         {/* <button className="flex gap-3.5 px-4 py-4 text-lg tracking-widest text-center bg-sage rounded-[100px] shadow-[0px_4px_4px_rgba(0,0,0,0.25)] text-stone-50">Save</button> */}
                         <BookmarkButton locationId={id} />
+                        {isAdmin && (
+                            <Link href={`/admin/editLocation/${id}`}>
+                                <button className="flex px-4 py-4 text-lg tracking-widest text-center bg-zinc-300 rounded-[100px] shadow-[0px_4px_4px_rgba(0,0,0,0.25)] text-stone-700 border-zinc-300 hover:bg-zinc-200 hover:border-zinc-400 border-2">
+                                    Edit Location
+                                </button>
+                            </Link>
+                        )}
                         <Link href={`/writeReview/${id}`}>
                             <button className="flex gap-3.5 px-4 py-4 text-lg tracking-widest text-center bg-blue-200 rounded-[100px] shadow-[0px_4px_4px_rgba(0,0,0,0.25)] text-stone-50 border-blue-200 hover:bg-blue-100 hover:text-blue-400 hover:border-blue-400 border-2">
                                 <Image src={Star}  alt="clear star" />
