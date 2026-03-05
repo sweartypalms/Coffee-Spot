@@ -14,6 +14,7 @@ import BusynessIndicator from "@/app/components/BusynessIndictator";
 import { headers } from "next/headers";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/authOptions";
+import LocationImageGallery from "../LocationImageGallery";
 
 const Page = async ({ params }: { params: { id: string } }) => {
     const { id } = params;
@@ -36,6 +37,11 @@ const Page = async ({ params }: { params: { id: string } }) => {
 
     const location = await locationResponse.json();
     const reviews = await reviewsResponse.json();
+    const galleryImages = Array.isArray(location?.gallery?.images)
+        ? location.gallery.images.filter((image: unknown): image is string => typeof image === 'string' && image.trim().length > 0)
+        : [];
+    const locationImages = Array.from(new Set([location.imageWebLink, ...galleryImages]))
+        .filter((image): image is string => !!image && image !== 'N/A');
 
     // console.log("[INFO]: Location Details: ", location);
     // console.log("[INFO]: Reviews: ", reviews);
@@ -61,13 +67,7 @@ const Page = async ({ params }: { params: { id: string } }) => {
                         <div className="max-md:mr-1 max-md:max-w-full">
                             <div className="flex gap-5 flex-col">
                                 <section className="grid grid-flow-col">
-                                    <Image
-                                        src={location.imageWebLink}
-                                        width={512}
-                                        height={512}
-                                        alt="Location Image"
-                                        className="w-128 h-128 object-cover border-8 border-cherry-blossom-pink rounded-lg"
-                                    />
+                                    <LocationImageGallery images={locationImages} locationName={location.name} />
                                 </section>
                                 <ReviewSection reviews={reviews} />
                             </div>
